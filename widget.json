@@ -1,8 +1,8 @@
 {
   "name": "run-python-code",
   "author": "ay27",
-  "url": "TODO...",
-  "version": "v1.0.0",
+  "url": "https://github.com/ay27/run_python_code",
+  "version": "1.0.0",
   "minAppVersion": "2.8.8",
   "displayName": {
     "default": "Run Python Code",
