@@ -1,0 +1,27 @@
+{
+  "name": "run-python-code",
+  "author": "ay27",
+  "url": "TODO...",
+  "version": "v1.0.0",
+  "minAppVersion": "2.8.8",
+  "displayName": {
+    "default": "",
+    "zh_CN": "python代码运行挂件"
+  },
+  "description": {
+    "default": "This is a run code widget",
+    "zh_CN": "这是一个运行代码的挂件"
+  },
+  "readme": {
+    "default": "README.md"
+  },
+  "funding": {
+    "openCollective": "",
+    "patreon": "",
+    "github": ""
+  },
+  "keywords": [
+    "code",
+    "代码"
+  ]
+}
