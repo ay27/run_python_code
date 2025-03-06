@@ -1,39 +1,17 @@
 # run-python-code
 
-This template should help get you started developing with Vue 3 in Vite.
+这是一个可以在思源笔记里运行、保存 python 代码的挂件。它使用了 pyodide 库，可以直接在浏览器里运行 python 代码，可以安装纯 python 的第三方库。
 
-## Recommended IDE Setup
+目前支持的功能有：
+* 运行、保存 python 代码
+* 安装第三方库
+* 借助 vscode 和 jedi 的能力，实现了代码自动补全
 
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+![preview](./preview.png)
 
-## Type Support for `.vue` Imports in TS
-
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
-npm install
-```
-
-### Compile and Hot-Reload for Development
-
-```sh
-npm run dev
-```
-
-### Type-Check, Compile and Minify for Production
-
-```sh
-npm run build
-```
-
-### Lint with [ESLint](https://eslint.org/)
-
-```sh
-npm run lint
-```
+TODO：
+- [ ] 设置面板
+- [ ] 代码格式化
+- [ ] 主题切换
+- [ ] 在设置面板里进行第三方库安装
+- [ ] 支持 streamlit

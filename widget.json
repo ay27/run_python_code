@@ -5,12 +5,12 @@
   "version": "v1.0.0",
   "minAppVersion": "2.8.8",
   "displayName": {
-    "default": "",
+    "default": "Run Python Code",
     "zh_CN": "python代码运行挂件"
   },
   "description": {
-    "default": "This is a run code widget",
-    "zh_CN": "这是一个运行代码的挂件"
+    "default": "A widget to run python code",
+    "zh_CN": "这是一个运行python代码的挂件"
   },
   "readme": {
     "default": "README.md"
