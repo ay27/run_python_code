@@ -1,15 +1,13 @@
 <template>
-  <div class="main-div">
+  <div class="main-div" @mouseenter="handleMouseEnter" @mouseleave="handleMouseLeave">
     <MonacoEditor
       ref="code_editor"
-      :pyodide="pyodide"
-      language="python"
       class="code-editor"
       @keydown.ctrl.enter="executeCode"
       @update:value="onEditorContentChange"
     />
-    <div class="head-toolbar flex bg-gray-200">
-      <el-tooltip content="Ctrl+Enter to Run" show-after="500">
+    <div class="middle-toolbar flex bg-gray-200">
+      <el-tooltip content="Ctrl+Enter to Run" :show-after="500">
         <button
           class="bg-blue-500 hover:bg-blue-400 text-gray-800 font-bold py-0.75 px-4 inline-flex items-center cursor-pointer"
           @click="executeCode"
@@ -21,20 +19,21 @@
         </button>
       </el-tooltip>
 
-      <!--      <el-tooltip content="Clear Result" show-after="500">-->
-      <!--        <button-->
-      <!--          class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-0.75 px-2 inline-flex items-center cursor-pointer"-->
-      <!--          @click="executeCode"-->
-      <!--        >-->
-      <!--          <el-icon>-->
-      <!--            <RefreshRight/>-->
-      <!--          </el-icon>-->
-      <!--        </button>-->
-      <!--      </el-tooltip>-->
-
       <pre v-if="finishedTime.length > 0" class="run-time-text text-green-600">
 Save and run finished at: {{ finishedTime }}. Cost: {{ costSeconds }}s</pre
       >
+
+      <el-tooltip content="Global settings" :show-after="500">
+        <button
+          class="hover:bg-gray-300 text-gray-800 font-bold py-0.75 px-2 inline-flex items-center cursor-pointer ml-auto"
+          v-show="isHover"
+          @click="configDialogVisible = true"
+        >
+          <el-icon color="black">
+            <Setting />
+          </el-icon>
+        </button>
+      </el-tooltip>
     </div>
 
     <!-- 执行结果展示 -->
@@ -42,23 +41,56 @@ Save and run finished at: {{ finishedTime }}. Cost: {{ costSeconds }}s</pre
       <pre class="text-gray-900" style="white-space: pre-wrap">{{ result }}</pre>
     </div>
   </div>
+
+  <el-dialog title="Global Settings" v-model="configDialogVisible" width="50%">
+    <el-form :model="config" label-position="top" class="px-4">
+      <el-form-item label="主题颜色">
+        <el-select v-model="config.theme" placeholder="Theme" style="width: 200px">
+          <el-option label="vs-light" value="vs-light" />
+          <el-option label="vs-dark" value="vs-dark" />
+        </el-select>
+      </el-form-item>
+      <el-form-item>
+        <template v-slot:label>
+          <span>预安装 pip 包，格式参考 requirements.txt 写法。可用包列表参考：</span>
+          <a
+            href="https://pyodide.org/en/stable/usage/packages-in-pyodide.html"
+            target="_blank"
+            class="text-blue-600 dark:text-blue-500 hover:underline"
+            >https://pyodide.org/en/stable/usage/packages-in-pyodide.html</a
+          >
+        </template>
+        <el-input
+          v-model="config.pipPackages"
+          placeholder="e.g. numpy==2.0.2"
+          :rows="8"
+          type="textarea"
+        />
+      </el-form-item>
+      <el-form-item>
+        <el-button type="primary" @click="saveConfig">保存</el-button>
+      </el-form-item>
+    </el-form>
+  </el-dialog>
 </template>
 
 <script lang="ts">
 import { loadPyodide } from 'pyodide'
 import MonacoEditor from '@/components/MonacoEditor.vue'
-import { CaretRight, RefreshRight } from '@element-plus/icons-vue'
+import { CaretRight, RefreshRight, Setting } from '@element-plus/icons-vue'
 import {
   currentWidgetID,
+  GetConfig,
   GetWidgetData,
+  SaveConfig,
   SaveWidgetData,
   siyuanClient,
 } from '@/utils/siyuan_client.js'
-import { ElLoading } from 'element-plus'
+import { ElLoading, ElMessage } from 'element-plus'
 
 export default {
   name: 'MainApp',
-  components: { RefreshRight, CaretRight, MonacoEditor },
+  components: { Setting, RefreshRight, CaretRight, MonacoEditor },
   data() {
     return {
       result: '',
@@ -67,6 +99,13 @@ export default {
       finishedTime: '',
       costSeconds: 0,
       startExecuteTime: 0,
+      isHover: false,
+      hoverTimeout: null,
+      configDialogVisible: false,
+      config: {
+        theme: 'vs-light',
+        pipPackages: '',
+      },
     }
   },
 
@@ -79,30 +118,109 @@ export default {
       text: 'Loading...',
       spinner: 'el-icon-loading',
       background: 'rgba(0, 0, 0, 0.7)',
-    });
+    })
 
-    Promise.all([this.waitLoadingPyodide(), this.waitKernelBoot()])
+    await Promise.all([this.waitLoadingPyodide(), this.waitKernelBoot()])
+    const cfg = await GetConfig()
+    if (cfg) {
+      this.config = cfg
+    }
+    this.$refs.code_editor.setEditorTheme(this.config.theme)
+    await this.installRequiredPackages(this.config.pipPackages)
 
     loadingInstance.close()
-
     this.loading = false
   },
 
   methods: {
+    async validatePipPackages() {
+      const loadingInstance = ElLoading.service({
+        lock: true,
+        text: 'Validating pip packages...',
+        spinner: 'el-icon-loading',
+        background: 'rgba(0, 0, 0, 0.7)',
+      })
+
+      const packages = this.config.pipPackages
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+      try {
+        const result = await Promise.all(
+          packages.map((pkg) =>
+            this.pyodide.runPythonAsync(`
+          import micropip
+          await micropip.install('${pkg}')
+          `),
+          ),
+        )
+      } catch (error) {
+        loadingInstance.close()
+        ElMessage.error({
+          message: `Failed to install pip packages: ${error}`,
+        })
+        return false
+      }
+      loadingInstance.close()
+      return true
+    },
+
+    async saveConfig() {
+      if (!(await this.validatePipPackages())) {
+        return
+      }
+
+      this.$refs.code_editor.setEditorTheme(this.config.theme);
+
+      await SaveConfig(this.config)
+      this.configDialogVisible = false
+    },
+
+    installRequiredPackages(pipPackages) {
+      if (!pipPackages) {
+        return
+      }
+
+      const packages = pipPackages
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+      return Promise.all(
+        packages.map((pkg) =>
+          this.pyodide.runPythonAsync(`
+          import micropip
+          await micropip.install('${pkg}')
+          `),
+        ),
+      )
+    },
+
+    handleMouseEnter() {
+      // 清除可能的延迟关闭定时器
+      if (this.hoverTimeout) {
+        clearTimeout(this.hoverTimeout)
+      }
+      this.isHover = true
+    },
+    handleMouseLeave() {
+      // 添加一点延迟避免快速移出时闪烁
+      this.hoverTimeout = setTimeout(() => {
+        this.isHover = false
+      }, 100)
+    },
+
     async waitKernelBoot() {
-      console.log('Waiting for kernel boot...')
       while (true) {
         try {
           await siyuanClient.currentTime()
           const rsp = await siyuanClient.bootProgress()
-          console.log('boot progress', rsp)
           break
         } catch (e) {
-          console.log('Waiting for kernel boot...', e)
           await new Promise((resolve) => setTimeout(resolve, 1000))
         }
       }
       await this.setupEditor()
+
     },
 
     async waitLoadingPyodide() {
@@ -111,7 +229,9 @@ export default {
         indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.27.2/full/',
         stdout: console.log,
         stderr: console.error,
+        packageCacheDir: 'pyodide-packages',
       })
+
 
       await this.pyodide.loadPackage(['micropip'])
       await this.pyodide.runPythonAsync(`
@@ -161,8 +281,6 @@ export default {
         return
       }
 
-      console.log('Executing code:', value)
-
       this.result = ''
 
       try {
@@ -175,6 +293,7 @@ export default {
 
         // 保存结果
         this.result = output.join('\n') || 'Execution successful (no output)'
+        console.log("result:", this.result)
       } catch (error) {
         this.result = error.toString()
       } finally {
@@ -200,12 +319,11 @@ export default {
   margin: auto;
 }
 
-.head-toolbar {
+.middle-toolbar {
   height: 22px;
   line-height: 22px;
   width: 95vw;
   margin: auto;
-  padding-right: 12px;
 }
 
 .output-section {
@@ -218,7 +336,7 @@ export default {
 }
 
 .run-time-text {
-  margin-left: auto;
   font-size: 11px;
+  margin-left: 12px;
 }
 </style>

@@ -12,10 +12,10 @@ export default {
       type: String,
       default: 'python',
     },
-    pyodide: {
-      type: Object,
-      default: null,
-    },
+    // pyodide: {
+    //   type: Object,
+    //   default: null,
+    // },
     theme: {
       type: String,
       default: 'vs-light',
@@ -29,7 +29,7 @@ export default {
       default: true,
     },
   },
-  expose: ['getEditorContent', 'setEditorContent'],
+  expose: ['getEditorContent', 'setEditorContent', 'setPyodide', 'setEditorTheme'],
   emits: ['update:value'],
   watch: {
     value(newValue) {
@@ -42,6 +42,12 @@ export default {
     updateEditorSize() {
       if (this.editor) {
         this.editor.layout()
+      }
+    },
+
+    setEditorTheme(theme) {
+      if (this.editor) {
+        monaco.editor.setTheme(theme)
       }
     },
 
@@ -58,11 +64,14 @@ export default {
       return ''
     },
 
+    setPyodide(pyodide) {
+      this.pyodide = pyodide;
+    },
+
     initializeCompletion() {
       monaco.languages.registerCompletionItemProvider('python', {
         triggerCharacters: ['.', ' '], // 触发补全的字符
         provideCompletionItems: async (model, position) => {
-          console.log("calling provideCompletionItems");
           if (!this.pyodide) {
             return {suggestions: []};
           }
@@ -80,7 +89,6 @@ export default {
           completions = script.complete(${line}, ${column})
           [{"name": c.name, "type": c.type, "doc": c.docstring() or ""} for c in completions if c.name[0]]
       `);
-            console.log("time", performance.now() - start_ts);
 
             // 将Python元组列表转换为JS对象数组
             const completions = pyCompletions.toJs().map(c => ({
@@ -89,7 +97,6 @@ export default {
               doc: c["doc"]
             }));
 
-            console.log("completions", completions);
 
             const ret = {
               suggestions: completions.map(c => ({
@@ -100,7 +107,6 @@ export default {
               }))
             };
 
-            console.log("ret", ret);
             return ret;
 
           } catch (error) {

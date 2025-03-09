@@ -30,7 +30,6 @@ export async function SaveWidgetData(data: any) {
       data: JSON.stringify(data)
     }
   });
-  console.log("SaveWidgetData", rsp);
 
   if (rsp.code !== 0) {
     throw new Error(rsp.message);
@@ -42,11 +41,31 @@ export async function GetWidgetData() {
     id: currentWidgetID
   });
 
-  console.log("GetWidgetData", rsp);
 
   if (rsp.code !== 0) {
     return {}
   }
 
   return JSON.parse(rsp.data?.data || "{}");
+}
+
+export async function SaveConfig(config: any) {
+  const rsp = await siyuanClient.putFile({
+    path: "/data/widgets/run_python_code_config.json",
+    file: JSON.stringify(config),
+  });
+  if (rsp.code !== 0) {
+    throw new Error(rsp.message);
+  }
+}
+
+export async function GetConfig() {
+  try {
+    const rsp = await siyuanClient.getFile({
+      path: "/data/widgets/run_python_code_config.json",
+    }, "json");
+    return rsp;
+  } catch (error) {
+    return null;
+  }
 }
