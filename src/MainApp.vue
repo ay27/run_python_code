@@ -132,6 +132,7 @@ export default {
       this.config = cfg
     }
     this.$refs.code_editor.setEditorTheme(this.config.theme)
+    this.$refs.code_editor.setPyodide(this.pyodideWrapper?.pyodide)
     await this.pyodideWrapper?.installPackages(this.config.pipPackages)
 
     loadingInstance.close()
@@ -321,7 +322,7 @@ plt.close()
 
 .code-editor {
   width: 95vw;
-  height: 60vh;
+  height: 40vh;
   margin: auto;
 }
 

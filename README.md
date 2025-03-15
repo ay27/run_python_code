@@ -15,3 +15,17 @@ TODO：
 - [ ] 主题切换
 - [x] 在设置面板里进行第三方库安装
 - [x] 支持保存 matplotlib 的输出结果 
+
+## 使用说明
+
+1. 使用挂件
+![](./docs/usage1.png)
+
+![](./docs/usage2.png)
+
+2. 全局设置
+![](./docs/usage3.png)
+![](./docs/usage4.png)
+
+3. matplotlib 图像支持
+![](./docs/usage6.png)

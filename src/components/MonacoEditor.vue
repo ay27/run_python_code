@@ -65,7 +65,7 @@ export default {
     },
 
     setPyodide(pyodide) {
-      this.pyodide = pyodide;
+      this.pyodide = pyodide
     },
 
     initializeCompletion() {
@@ -73,61 +73,58 @@ export default {
         triggerCharacters: ['.', ' '], // 触发补全的字符
         provideCompletionItems: async (model, position) => {
           if (!this.pyodide) {
-            return {suggestions: []};
+            return { suggestions: [] }
           }
 
-          const code = model.getValue();
-          const line = position.lineNumber; //起始为 1
-          const column = position.column - 1; //起始为 0
+          const code = model.getValue()
+          const line = position.lineNumber //起始为 1
+          const column = position.column - 1 //起始为 0
 
           try {
-            const start_ts = performance.now();
             const pyCompletions = await this.pyodide.runPythonAsync(`
           import jedi
           jedi.settings.fast_parser = True
           script = jedi.Script(code=${JSON.stringify(code)})
           completions = script.complete(${line}, ${column})
           [{"name": c.name, "type": c.type, "doc": c.docstring() or ""} for c in completions if c.name[0]]
-      `);
+      `)
 
             // 将Python元组列表转换为JS对象数组
-            const completions = pyCompletions.toJs().map(c => ({
-              name: c["name"],
-              type: c["type"],
-              doc: c["doc"]
-            }));
-
+            const completions = pyCompletions.toJs().map((c) => ({
+              name: c['name'],
+              type: c['type'],
+              doc: c['doc'],
+            }))
 
             const ret = {
-              suggestions: completions.map(c => ({
+              suggestions: completions.map((c) => ({
                 label: c.name,
                 kind: getCompletionItemKind(c.type),
                 documentation: c.doc,
                 insertText: c.name,
-              }))
-            };
+              })),
+            }
 
-            return ret;
-
+            return ret
           } catch (error) {
-            console.error('Completion error:', error);
-            return {suggestions: []};
+            console.error('Completion error:', error)
+            return { suggestions: [] }
           }
-        }
-      });
+        },
+      })
 
-// 映射Jedi类型到Monaco的CompletionItemKind
+      // 映射Jedi类型到Monaco的CompletionItemKind
       function getCompletionItemKind(jediType) {
         const map = {
-          'module': monaco.languages.CompletionItemKind.Module,
-          'class': monaco.languages.CompletionItemKind.Class,
-          'function': monaco.languages.CompletionItemKind.Function,
-          'instance': monaco.languages.CompletionItemKind.Variable,
-          'keyword': monaco.languages.CompletionItemKind.Keyword,
-        };
-        return map[jediType] || monaco.languages.CompletionItemKind.Property;
+          module: monaco.languages.CompletionItemKind.Module,
+          class: monaco.languages.CompletionItemKind.Class,
+          function: monaco.languages.CompletionItemKind.Function,
+          instance: monaco.languages.CompletionItemKind.Variable,
+          keyword: monaco.languages.CompletionItemKind.Keyword,
+        }
+        return map[jediType] || monaco.languages.CompletionItemKind.Property
       }
-    }
+    },
   },
   mounted() {
     this.editor = monaco.editor.create(this.$refs.editorContainer, {
@@ -136,7 +133,7 @@ export default {
       theme: this.theme,
       readOnly: !this.editable,
       automaticLayout: true,
-      minimap: {enabled: false},
+      minimap: { enabled: false },
       wordWrap: 'on',
       trimAutoWhitespace: true,
       wordBasedSuggestions: 'currentDocument',
