@@ -2,7 +2,7 @@
   "name": "run-python-code",
   "author": "ay27",
   "url": "https://github.com/ay27/run_python_code",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "minAppVersion": "2.8.8",
   "displayName": {
     "default": "Run Python Code",

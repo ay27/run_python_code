@@ -37,8 +37,9 @@ Save and run finished at: {{ finishedTime }}. Cost: {{ costSeconds }}s</pre
     </div>
 
     <!-- 执行结果展示 -->
-    <div class="output-section">
+    <div class="output-section" ref="output_section">
       <pre class="text-gray-900" style="white-space: pre-wrap">{{ result }}</pre>
+      <div ref="matplotlibImageDiv" id="target" class="p-2"></div>
     </div>
   </div>
 
@@ -52,7 +53,10 @@ Save and run finished at: {{ finishedTime }}. Cost: {{ costSeconds }}s</pre
       </el-form-item>
       <el-form-item>
         <template v-slot:label>
-          <span>预安装 pip 包，格式参考 requirements.txt 写法。可用包列表参考：</span>
+          <span
+            >预安装 pip 包，格式参考 requirements.txt 写法。仅支持纯 python 语言的 pip
+            包，具体参考：</span
+          >
           <a
             href="https://pyodide.org/en/stable/usage/packages-in-pyodide.html"
             target="_blank"
@@ -79,7 +83,6 @@ import { loadPyodide } from 'pyodide'
 import MonacoEditor from '@/components/MonacoEditor.vue'
 import { CaretRight, RefreshRight, Setting } from '@element-plus/icons-vue'
 import {
-  currentWidgetID,
   GetConfig,
   GetWidgetData,
   SaveConfig,
@@ -87,20 +90,23 @@ import {
   siyuanClient,
 } from '@/utils/siyuan_client.js'
 import { ElLoading, ElMessage } from 'element-plus'
+import { PyodideWrapper } from './utils/pyodide_wrapper'
 
+// Start of Selection
 export default {
   name: 'MainApp',
-  components: { Setting, RefreshRight, CaretRight, MonacoEditor },
+  components: { Setting, CaretRight, MonacoEditor }, // 移除未使用的 RefreshRight 组件
   data() {
     return {
       result: '',
-      loading: null,
-      pyodide: null,
+      loading: false,
+      pyodideWrapper: null as PyodideWrapper | null,
+      canvasImages: {} as Record<string, string>,
       finishedTime: '',
       costSeconds: 0,
       startExecuteTime: 0,
       isHover: false,
-      hoverTimeout: null,
+      hoverTimeout: 0,
       configDialogVisible: false,
       config: {
         theme: 'vs-light',
@@ -126,73 +132,22 @@ export default {
       this.config = cfg
     }
     this.$refs.code_editor.setEditorTheme(this.config.theme)
-    await this.installRequiredPackages(this.config.pipPackages)
+    await this.pyodideWrapper?.installPackages(this.config.pipPackages)
 
     loadingInstance.close()
     this.loading = false
   },
 
   methods: {
-    async validatePipPackages() {
-      const loadingInstance = ElLoading.service({
-        lock: true,
-        text: 'Validating pip packages...',
-        spinner: 'el-icon-loading',
-        background: 'rgba(0, 0, 0, 0.7)',
-      })
-
-      const packages = this.config.pipPackages
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0)
-      try {
-        const result = await Promise.all(
-          packages.map((pkg) =>
-            this.pyodide.runPythonAsync(`
-          import micropip
-          await micropip.install('${pkg}')
-          `),
-          ),
-        )
-      } catch (error) {
-        loadingInstance.close()
-        ElMessage.error({
-          message: `Failed to install pip packages: ${error}`,
-        })
-        return false
-      }
-      loadingInstance.close()
-      return true
-    },
-
     async saveConfig() {
-      if (!(await this.validatePipPackages())) {
+      if (!(await this.pyodideWrapper?.validatePipPackages(this.config.pipPackages))) {
         return
       }
 
-      this.$refs.code_editor.setEditorTheme(this.config.theme);
+      this.$refs.code_editor.setEditorTheme(this.config.theme)
 
       await SaveConfig(this.config)
       this.configDialogVisible = false
-    },
-
-    installRequiredPackages(pipPackages) {
-      if (!pipPackages) {
-        return
-      }
-
-      const packages = pipPackages
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0)
-      return Promise.all(
-        packages.map((pkg) =>
-          this.pyodide.runPythonAsync(`
-          import micropip
-          await micropip.install('${pkg}')
-          `),
-        ),
-      )
     },
 
     handleMouseEnter() {
@@ -213,53 +168,85 @@ export default {
       while (true) {
         try {
           await siyuanClient.currentTime()
-          const rsp = await siyuanClient.bootProgress()
+          await siyuanClient.bootProgress()
           break
         } catch (e) {
           await new Promise((resolve) => setTimeout(resolve, 1000))
         }
       }
       await this.setupEditor()
-
     },
 
     async waitLoadingPyodide() {
-      // 加载 Pyodide
-      this.pyodide = await loadPyodide({
-        indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.27.2/full/',
-        stdout: console.log,
-        stderr: console.error,
-        packageCacheDir: 'pyodide-packages',
-      })
-
-
-      await this.pyodide.loadPackage(['micropip'])
-      await this.pyodide.runPythonAsync(`
-    import micropip
-    await micropip.install('jedi')
-    `)
-
-      this.$refs.code_editor.setPyodide(this.pyodide)
+      this.pyodideWrapper = new PyodideWrapper()
+      await this.pyodideWrapper.intialize()
     },
 
     async setupEditor() {
       const savedData = await GetWidgetData()
-      this.$refs.code_editor.setEditorContent(savedData.code || '')
       this.finishedTime = savedData.finishedTime || ''
       this.costSeconds = savedData.costSeconds || 0
       this.result = savedData.result || ''
+
+      this.$refs.matplotlibImageDiv.innerHTML = savedData.matplotlibDiv || ''
+      this.canvasImages = savedData.canvasImages || {}
+      // console.log('canvasImages:', this.canvasImages)
+
+      for (const canvasId in this.canvasImages) {
+        const canvas = document.getElementById(canvasId)
+        // console.log('canvas:', canvas)
+        if (canvas) {
+          const img = new Image()
+          img.src = this.canvasImages[canvasId]
+          img.onload = () => {
+            const ctx = canvas.getContext('2d')
+            canvas.width = img.naturalWidth
+            canvas.height = img.naturalHeight
+            ctx.drawImage(img, 0, 0)
+          }
+        }
+      }
+      // 设置编辑器内容，它需要在最后设置，因为设置内容会触发编辑器内容变更事件，导致上面的数据被覆盖
+      this.$refs.code_editor.setEditorContent(savedData.code || '')
     },
 
     async atExecuteFinish() {
       this.finishedTime = new Date().toLocaleString()
       this.costSeconds = ((new Date().getTime() - this.startExecuteTime) / 1000).toFixed(2)
 
-      await SaveWidgetData({
-        code: this.$refs.code_editor.getEditorContent(),
-        finishedTime: this.finishedTime,
-        costSeconds: this.costSeconds,
-        result: this.result,
-      })
+      // const matplotlibDiv = document.querySelector('div[id^="matplotlib_"]')
+      // if (matplotlibDiv) {
+      //   this.$refs.matplotlibImageDiv.innerHTML = matplotlibDiv.innerHTML
+      //   matplotlibDiv.remove()
+      // }
+
+      setTimeout(async () => {
+        // console.log('start save data')
+        this.canvasImages = {}
+        const canvasList = document.querySelectorAll('canvas[id^="matplotlib_"]')
+        // 怎么确认 canvas 确实已经绘制完成了呢？
+
+        // console.log('canvasList:', canvasList)
+        for (const canvas of canvasList) {
+          const img = canvas.toDataURL('image/png')
+          const ctx = canvas.getContext('2d')
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data
+          const isEmpty = Array.from(imageData).every((v) => v === 0)
+          // console.log(isEmpty ? 'Canvas 为空' : 'Canvas 有内容')
+          if (!isEmpty) {
+            this.canvasImages[canvas.id] = img
+          }
+        }
+
+        await SaveWidgetData({
+          code: this.$refs.code_editor.getEditorContent(),
+          finishedTime: this.finishedTime,
+          costSeconds: this.costSeconds,
+          result: this.result,
+          matplotlibDiv: this.$refs.matplotlibImageDiv?.innerHTML || '',
+          canvasImages: this.canvasImages,
+        })
+      }, 1000)
     },
 
     async onEditorContentChange() {
@@ -268,12 +255,14 @@ export default {
         finishedTime: this.finishedTime,
         costSeconds: this.costSeconds,
         result: this.result,
+        matplotlibDiv: this.$refs.matplotlibImageDiv?.innerHTML || '',
+        canvasImages: this.canvasImages,
       })
     },
 
     async executeCode() {
       this.startExecuteTime = new Date().getTime()
-      const value = this.$refs.code_editor.getEditorContent()
+      let value = this.$refs.code_editor.getEditorContent()
       if (!value) {
         this.result = 'Execution successful (no output)'
         this.atExecuteFinish()
@@ -282,18 +271,35 @@ export default {
       }
 
       this.result = ''
+      this.$refs.matplotlibImageDiv.innerHTML = ''
+      const canvasList = document.querySelectorAll('canvas[id^="matplotlib_"]')
+      for (const canvas of canvasList) {
+        const ctx = canvas.getContext('2d')
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        canvas.remove()
+      }
+      this.canvasImages = {}
 
       try {
         // 重定向输出
         const output = []
-        this.pyodide.setStdout({ batched: (text) => output.push(text) })
+        this.pyodideWrapper?.pyodide.setStdout({ batched: (text) => output.push(text) })
+
+        document.pyodideMplTarget = document.getElementById('target')
 
         // 执行代码
-        await this.pyodide.runPythonAsync(value)
+        if (value.includes('matplotlib')) {
+          value += `
+import matplotlib.pyplot as plt
+plt.close()
+          `
+        }
+
+        await this.pyodideWrapper?.pyodide.runPythonAsync(value)
 
         // 保存结果
         this.result = output.join('\n') || 'Execution successful (no output)'
-        console.log("result:", this.result)
+        // console.log('result:', this.result)
       } catch (error) {
         this.result = error.toString()
       } finally {
