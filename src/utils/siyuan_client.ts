@@ -3,12 +3,6 @@ import { Client } from '@siyuan-community/siyuan-sdk'
 /* 初始化客户端 (默认使用 Axios 发起 XHR 请求) */
 export const siyuanClient = new Client({
   /**
-   * (可选) 思源内核服务地址
-   * @default: document.baseURI
-   */
-  baseURL: 'http://localhost:6806/',
-
-  /**
    * (可选) 思源内核服务 token
    * @default: <空>
    */
