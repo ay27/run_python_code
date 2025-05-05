@@ -29,8 +29,13 @@ export default {
       default: true,
     },
   },
-  expose: ['getEditorContent', 'setEditorContent', 'setPyodide', 'setEditorTheme'],
-  emits: ['update:value'],
+  expose: ['getEditorContent', 'setEditorContent', 'setPyodide', 'setEditorTheme', 'getPosition', 'setPosition'],
+  emits: ['update:value', 'format-code'],
+  data() {
+    return {
+      position: null,
+    }
+  },
   watch: {
     value(newValue) {
       if (this.editor && newValue !== this.editor.getValue()) {
@@ -62,6 +67,16 @@ export default {
         return this.editor.getValue()
       }
       return ''
+    },
+
+    getPosition() {
+      return this.position
+    },
+
+    setPosition(position) {
+      if (this.editor) {
+        this.editor.setPosition(position)
+      }
     },
 
     setPyodide(pyodide) {
@@ -144,6 +159,20 @@ export default {
     })
     this.editor.onDidChangeModelContent(() => {
       this.$emit('update:value', this.editor.getValue())
+    })
+
+    // 添加键盘事件监听
+    this.editor.addAction({
+      id: 'format-code',
+      label: 'Format Code',
+      keybindings: [monaco.KeyMod.Alt | monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyL],
+      run: () => {
+        this.$emit('format-code')
+      },
+    })
+
+    this.editor.onDidChangeCursorPosition((e) => {
+      this.position = e.position
     })
 
     this.initializeCompletion()

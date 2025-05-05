@@ -17,6 +17,7 @@ export class PyodideWrapper {
     await this.pyodide.runPythonAsync(`
     import micropip
     await micropip.install('jedi')
+    await micropip.install('black')
     `)
   }
 

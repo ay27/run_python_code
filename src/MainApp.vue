@@ -1,17 +1,22 @@
 <template>
   <div class="main-div" @mouseenter="handleMouseEnter" @mouseleave="handleMouseLeave">
-    <MonacoEditor
-      ref="code_editor"
-      class="code-editor"
-      @keydown.ctrl.enter="executeCode"
-      @update:value="onEditorContentChange"
-    />
+    <MonacoEditor ref="code_editor" class="code-editor" @keydown.ctrl.enter="executeCode" @format-code="formatCode"
+      @update:value="onEditorContentChange" />
     <div class="middle-toolbar flex bg-gray-200">
+      <el-tooltip content="Opt+Cmd+L to Format Code" :show-after="500">
+        <button
+          class="bg-green-500 hover:bg-green-400 text-gray-800 font-bold py-0.75 px-4 inline-flex items-center cursor-pointer"
+          @click="formatCode">
+          <el-icon color="white">
+            <Brush />
+          </el-icon>
+        </button>
+      </el-tooltip>
+
       <el-tooltip content="Ctrl+Enter to Run" :show-after="500">
         <button
           class="bg-blue-500 hover:bg-blue-400 text-gray-800 font-bold py-0.75 px-4 inline-flex items-center cursor-pointer"
-          @click="executeCode"
-        >
+          @click="executeCode">
           <el-icon color="white">
             <CaretRight />
           </el-icon>
@@ -20,15 +25,12 @@
       </el-tooltip>
 
       <pre v-if="finishedTime.length > 0" class="run-time-text text-green-600">
-Save and run finished at: {{ finishedTime }}. Cost: {{ costSeconds }}s</pre
-      >
+Save and run finished at: {{ finishedTime }}. Cost: {{ costSeconds }}s</pre>
 
       <el-tooltip content="Global settings" :show-after="500">
         <button
           class="hover:bg-gray-300 text-gray-800 font-bold py-0.75 px-2 inline-flex items-center cursor-pointer ml-auto"
-          v-show="isHover"
-          @click="configDialogVisible = true"
-        >
+          v-show="isHover" @click="configDialogVisible = true">
           <el-icon color="black">
             <Setting />
           </el-icon>
@@ -53,23 +55,12 @@ Save and run finished at: {{ finishedTime }}. Cost: {{ costSeconds }}s</pre
       </el-form-item>
       <el-form-item>
         <template v-slot:label>
-          <span
-            >预安装 pip 包，格式参考 requirements.txt 写法。仅支持纯 python 语言的 pip
-            包，具体参考：</span
-          >
-          <a
-            href="https://pyodide.org/en/stable/usage/packages-in-pyodide.html"
-            target="_blank"
-            class="text-blue-600 dark:text-blue-500 hover:underline"
-            >https://pyodide.org/en/stable/usage/packages-in-pyodide.html</a
-          >
+          <span>预安装 pip 包，格式参考 requirements.txt 写法。仅支持纯 python 语言的 pip
+            包，具体参考：</span>
+          <a href="https://pyodide.org/en/stable/usage/packages-in-pyodide.html" target="_blank"
+            class="text-blue-600 dark:text-blue-500 hover:underline">https://pyodide.org/en/stable/usage/packages-in-pyodide.html</a>
         </template>
-        <el-input
-          v-model="config.pipPackages"
-          placeholder="e.g. numpy==2.0.2"
-          :rows="8"
-          type="textarea"
-        />
+        <el-input v-model="config.pipPackages" placeholder="e.g. numpy==2.0.2" :rows="8" type="textarea" />
       </el-form-item>
       <el-form-item>
         <el-button type="primary" @click="saveConfig">保存</el-button>
@@ -81,7 +72,7 @@ Save and run finished at: {{ finishedTime }}. Cost: {{ costSeconds }}s</pre
 <script lang="ts">
 import { loadPyodide } from 'pyodide'
 import MonacoEditor from '@/components/MonacoEditor.vue'
-import { CaretRight, RefreshRight, Setting } from '@element-plus/icons-vue'
+import { CaretRight, Setting, Brush } from '@element-plus/icons-vue'
 import {
   GetConfig,
   GetWidgetData,
@@ -95,7 +86,7 @@ import { PyodideWrapper } from './utils/pyodide_wrapper'
 // Start of Selection
 export default {
   name: 'MainApp',
-  components: { Setting, CaretRight, MonacoEditor }, // 移除未使用的 RefreshRight 组件
+  components: { Setting, CaretRight, MonacoEditor, Brush }, // 移除未使用的 RefreshRight 组件
   data() {
     return {
       result: '',
@@ -259,6 +250,54 @@ export default {
         matplotlibDiv: this.$refs.matplotlibImageDiv?.innerHTML || '',
         canvasImages: this.canvasImages,
       })
+    },
+
+    async formatCode() {
+      const value = this.$refs.code_editor.getEditorContent()
+      if (!value) {
+        ElMessage.error('No code to format')
+        return
+      }
+
+      // 记录当前光标位置
+      const cursorPosition = this.$refs.code_editor.getPosition()
+
+      try {
+        const output = []
+        this.pyodideWrapper?.pyodide.setStdout({ batched: (text) => output.push(text) })
+
+        // 执行代码
+        await this.pyodideWrapper?.pyodide.runPythonAsync(`
+          import black
+          import json
+          code = ${JSON.stringify(value)}
+          try:
+            formated = black.format_file_contents(code, fast=False, mode=black.Mode(line_length=120))
+          except black.report.NothingChanged:
+            print(json.dumps({"ok": True, "error": "", "formated": ""}))
+          except Exception as e:
+            print(json.dumps({"ok": False, "error": str(e), "formated": ""}))
+          else:
+            print(json.dumps({"ok": True, "error": "", "formated": formated}))
+      `)
+        const formatResult = JSON.parse(output[0])
+
+        if (formatResult.ok) {
+          if (formatResult.formated) {
+            this.$refs.code_editor.setEditorContent(formatResult.formated)
+            // 恢复光标位置
+            this.$refs.code_editor.setPosition(cursorPosition)
+          }
+          ElMessage.success({
+            message: 'Format code successfully',
+            duration: 500,
+          })
+        } else {
+          ElMessage.error(formatResult.error)
+        }
+      } catch (error) {
+        ElMessage.error(error.toString())
+      }
     },
 
     async executeCode() {

@@ -6,12 +6,13 @@
 * 运行、保存 python 代码
 * 安装第三方库
 * 借助 monaco editor 和 jedi 的能力，实现了代码自动补全
+* 借助 black 的能力，实现了代码格式化
 
 ![preview](./preview.png)
 
 TODO：
 - [x] 设置面板
-- [ ] 代码格式化
+- [x] 代码格式化
 - [ ] 主题切换
 - [x] 在设置面板里进行第三方库安装
 - [x] 支持保存 matplotlib 的输出结果 
