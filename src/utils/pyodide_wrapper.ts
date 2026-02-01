@@ -4,14 +4,41 @@ import { loadPyodide } from 'pyodide'
 export class PyodideWrapper {
   public pyodide: any
 
-  public async intialize() {
-    // 加载 Pyodide
-    this.pyodide = await loadPyodide({
-      indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.27.2/full/',
+  // 备用 CDN 列表，按优先级排序
+  private static readonly CDN_URLS = [
+    'https://cdn.jsdelivr.net/pyodide/v0.27.2/full/',
+    'https://fastly.jsdelivr.net/pyodide/v0.27.2/full/',  // jsdelivr 的 Fastly CDN
+    'https://gcore.jsdelivr.net/pyodide/v0.27.2/full/',   // jsdelivr 的 Gcore CDN
+  ]
+
+  private async tryLoadPyodide(indexURL: string): Promise<any> {
+    console.log(`Trying to load Pyodide from: ${indexURL}`)
+    return await loadPyodide({
+      indexURL,
       stdout: console.log,
       stderr: console.error,
       packageCacheDir: 'pyodide-packages',
     })
+  }
+
+  public async intialize() {
+    // 加载 Pyodide，尝试多个 CDN 源
+    let lastError: Error | null = null
+    
+    for (const cdnUrl of PyodideWrapper.CDN_URLS) {
+      try {
+        this.pyodide = await this.tryLoadPyodide(cdnUrl)
+        console.log(`Successfully loaded Pyodide from: ${cdnUrl}`)
+        break
+      } catch (error) {
+        console.warn(`Failed to load Pyodide from ${cdnUrl}:`, error)
+        lastError = error as Error
+      }
+    }
+
+    if (!this.pyodide) {
+      throw new Error(`Failed to load Pyodide from all CDN sources. Last error: ${lastError?.message}`)
+    }
 
     await this.pyodide.loadPackage(['micropip'])
     await this.pyodide.runPythonAsync(`
