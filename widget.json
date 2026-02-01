@@ -2,7 +2,7 @@
   "name": "run-python-code",
   "author": "ay27",
   "url": "https://github.com/ay27/run_python_code",
-  "version": "1.0.4",
+  "version": "1.0.6",
   "minAppVersion": "2.8.8",
   "displayName": {
     "default": "Run Python Code",
@@ -20,8 +20,5 @@
     "patreon": "",
     "github": ""
   },
-  "keywords": [
-    "code",
-    "代码"
-  ]
+  "keywords": ["code", "代码"]
 }
